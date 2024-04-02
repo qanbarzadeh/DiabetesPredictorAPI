@@ -6,11 +6,10 @@ import xgboost
 
 # Initialize the Flask application
 app = Flask(__name__)
-api = Api(app, version='1.0', title='Diabetes Prediction API',
-          description='A simple API for predicting diabetes risk')
+api = Api(app, version='1.0', title='Diabetes Prediction API',description='A simple API for predicting diabetes risk')
 
 # Load the trained model (ensure the path is correct)
-model_path = 'C:\\Users\\ali\\diabetes_risk_prediction\\notebooks\\best_model_xgboost.joblib'
+model_path = './calibrated_best_model.joblib'
 model = joblib.load(model_path)
 
 # Define the input and output data model for Swagger documentation
@@ -25,8 +24,8 @@ input_model = api.model('InputModel', {
     'Age': fields.Integer(required=True, description='Age (years)'),
 })
 
-output_model = api.model('OutputModel', {
-    'prediction': fields.Integer(description='Predicted class (0 for non-diabetic, 1 for diabetic)')
+
+output_model = api.model('OutputModel', {'risk_level': fields.String(description='Risk level (Low Risk, Medium Risk, High Risk)')
 })
 
 def preprocess_input(data):
@@ -49,10 +48,21 @@ class Predict(Resource):
         processed_features = preprocess_input(data)
         
         # Make prediction
-        prediction = model.predict(processed_features)[0]
+        ##prediction = model.predict(processed_features)[0]
+        prediction_probability = model.predict_proba(processed_features)[0][1] # Probability of being diabetic
+        
+        # Determine risk level based on prediction probability
+        if prediction_probability < 0.25:
+            risk_level = 'Low Risk'
+        elif prediction_probability < 0.55:
+            risk_level = 'Medium Risk'
+        else:
+            risk_level = 'High Risk'
         
         # Respond with the predicted value
-        return {'prediction': int(prediction)}
+        ##return {'prediction': int(prediction)}
+        # Respond with the risk level
+        return {'risk_level': risk_level}
 
 @app.route('/')
 def index():
