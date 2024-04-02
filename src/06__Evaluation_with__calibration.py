@@ -2,8 +2,10 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.impute import KNNImputer
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.pipeline import Pipeline
 from xgboost import XGBClassifier
 from sklearn.svm import SVC
 from sklearn.neural_network import MLPClassifier
@@ -14,6 +16,8 @@ from pathlib import Path
 import sys
 import logging
 from sklearn.metrics import confusion_matrix
+from sklearn.preprocessing import StandardScaler
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -69,38 +73,63 @@ def plot_evaluation_charts(y_test, y_pred, y_pred_proba, model_name):
     plt.tight_layout()
     plt.show()
 
+
+
 if __name__ == "__main__":
+    # Configure logging
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+    # Load and preprocess the data
     config_path = '../config/config.json'
     df = load_feature_engineered_data(config_path)
-    if df is not None:
-        X = df.drop('Outcome', axis=1)
-        y = df['Outcome']
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    columns_to_replace = ['Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI']
+    df[columns_to_replace] = df[columns_to_replace].replace(0, np.nan)
 
-        models = {
-            'RandomForest': RandomForestClassifier(),
-            'GradientBoosting': GradientBoostingClassifier(),
-            'XGB': XGBClassifier(),
-            'SVC': SVC(probability=True),
-            'MLP': MLPClassifier()
-        }
 
-        best_model_score = 0
-        best_model_name = ''
-        best_calibrated_model = None
+    # Prepare the data
+    X = df.drop('Outcome', axis=1)
+    y = df['Outcome']
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-        for model_name, model in models.items():
-            logging.info(f"Training and calibrating {model_name}")
-            model.fit(X_train, y_train)
-            calibrated_model = CalibratedClassifierCV(model, method='sigmoid', cv=5)
-            calibrated_model.fit(X_train, y_train)
-            score = roc_auc_score(y_test, calibrated_model.predict_proba(X_test)[:, 1])
-            if score > best_model_score:
-                best_model_score = score
-                best_model_name = model_name
-                best_calibrated_model = calibrated_model
-            evaluate_model_performance(calibrated_model, X_test, y_test, model_name)
+    # Define and apply the preprocessing pipeline
+    preprocessing_pipeline = Pipeline([
+        ('imputer', KNNImputer(n_neighbors=5)),
+        ('scaler', StandardScaler()),
+    ])
+    X_train_preprocessed = preprocessing_pipeline.fit_transform(X_train)
+    X_test_preprocessed = preprocessing_pipeline.transform(X_test)
 
-        logging.info(f"Best model is {best_model_name} with ROC AUC {best_model_score:.4f}")
-        # Save the best calibrated model
-        dump(best_calibrated_model, 'calibrated_best_model.joblib')
+    # Define models
+    models = {
+        'RandomForest': RandomForestClassifier(random_state=42),
+        'GradientBoosting': GradientBoostingClassifier(random_state=42),
+        'XGB': XGBClassifier(use_label_encoder=False, eval_metric='logloss', random_state=42),
+        'SVC': SVC(probability=True, random_state=42),
+        'MLP': MLPClassifier(random_state=42)
+    }
+
+    # Train, calibrate models, and evaluate
+    best_model_score = 0
+    best_model_name = ''
+    best_calibrated_model = None
+
+    for model_name, model in models.items():
+        logging.info(f"Training and calibrating {model_name}")
+        model.fit(X_train_preprocessed, y_train)
+        calibrated_model = CalibratedClassifierCV(model, method='sigmoid', cv=5)
+        calibrated_model.fit(X_train_preprocessed, y_train)
+
+        score = roc_auc_score(y_test, calibrated_model.predict_proba(X_test_preprocessed)[:, 1])
+        if score > best_model_score:
+            best_model_score = score
+            best_model_name = model_name
+            best_calibrated_model = calibrated_model
+
+        evaluate_model_performance(calibrated_model, X_test_preprocessed, y_test, model_name)
+
+    logging.info(f"Best model is {best_model_name} with ROC AUC {best_model_score:.4f}")
+
+    # Save the best calibrated model
+    model_path = 'calibrated_best_model.joblib'
+    dump(best_calibrated_model, model_path)
+    logging.info(f"Successfully saved the best calibrated model to {model_path}")
