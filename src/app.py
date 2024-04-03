@@ -8,7 +8,7 @@ import xgboost
 app = Flask(__name__)
 api = Api(app, version='1.0', title='Diabetes Prediction API',description='A simple API for predicting diabetes risk')
 
-# Load the trained model (ensure the path is correct)
+# Load the trained model
 model_path = './calibrated_best_model.joblib'
 model = joblib.load(model_path)
 
@@ -48,7 +48,6 @@ class Predict(Resource):
         processed_features = preprocess_input(data)
         
         # Make prediction
-        ##prediction = model.predict(processed_features)[0]
         prediction_probability = model.predict_proba(processed_features)[0][1] # Probability of being diabetic
         
         # Determine risk level based on prediction probability
@@ -60,14 +59,12 @@ class Predict(Resource):
             risk_level = 'High Risk'
         
         # Respond with the predicted value
-        ##return {'prediction': int(prediction)}
-        # Respond with the risk level
         return {'risk_level': risk_level}
 
 @app.route('/')
 def index():
     # This route serves the HTML page
-    return render_template('/index.html')  # Ensure the HTML file exists in the templates folder
+    return render_template('/index.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
