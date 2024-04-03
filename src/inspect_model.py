@@ -21,6 +21,6 @@ def load_and_inspect_model(model_path):
 
 if __name__ == "__main__":
     # Adjust the path to where your model is saved
-    model_path = 'C:\\Users\\ali\\diabetes_risk_prediction\\notebooks\\Updated_model_xgboost.json'
+    model_path = './calibrated_best_model.joblib'
     
     load_and_inspect_model(model_path)
