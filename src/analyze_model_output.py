@@ -51,4 +51,4 @@ risk_levels = ['Low Risk' if prob < 0.33 else 'Medium Risk' if prob < 0.66 else 
 print("\nCategorized Risk Levels:")
 for i, risk_level in enumerate(risk_levels):
     print(f"Instance {i+1}: {risk_level}")
-# Note: For clustering identification, manually observe the histogram to identify gaps and clusters.
+

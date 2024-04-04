@@ -3,24 +3,20 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.impute import KNNImputer
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.pipeline import Pipeline
 from xgboost import XGBClassifier
 from sklearn.svm import SVC
 from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import roc_auc_score, roc_curve, auc, accuracy_score, precision_score, recall_score, f1_score
-from sklearn.calibration import CalibratedClassifierCV, calibration_curve
 from joblib import dump
 from pathlib import Path
 import sys
 import logging
 from sklearn.metrics import confusion_matrix
 from sklearn.preprocessing import StandardScaler
-import matplotlib.pyplot as plt
 from sklearn.calibration import calibration_curve
-from sklearn.calibration import IsotonicRegression
-
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -66,7 +62,6 @@ def plot_evaluation_charts(y_test, y_pred, y_pred_proba, model_name):
     plt.ylabel('True Positive Rate')
     plt.title(f'ROC Curve - {model_name}')
     plt.legend(loc="lower right")
-
     cm = confusion_matrix(y_test, y_pred)
     plt.subplot(1, 2, 2)
     sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
@@ -76,38 +71,47 @@ def plot_evaluation_charts(y_test, y_pred, y_pred_proba, model_name):
     plt.tight_layout()
     plt.show()
 
-#Calibration Curve Function Updated for Isotonic Regression
+    
+##Sk-Learn calibration curve plot
 def plot_calibration_curve(y_true, y_pred, n_bins=10):
+    """
+    Plots a calibration curve and prints the calibration values.
+    """
     prob_true, prob_pred = calibration_curve(y_true, y_pred, n_bins=n_bins, strategy='uniform')
     
+    # Print the calibration values
     print("\nCalibration values:")
     print("Binned Probability | Fraction of Positives")
-    for prob_predicted, prob_actual in zip(prob_pred, prob_true):
-        print(f"{prob_predicted:19} | {prob_actual}")
+    for prob, true_prob in zip(prob_pred, prob_true):
+        print(f"{prob:20} | {true_prob}")
 
+    # Plot the calibration curve
     fig = plt.figure(figsize=(10, 8))
     ax1 = fig.add_subplot(111)
-    ax1.plot(prob_pred, prob_true, marker='o', linewidth=1, label='Model')
-    ax1.plot([0, 1], [0, 1], linestyle='--', label='Perfectly calibrated', color='gray')
-    ax1.set_xlabel('Mean Predicted Probability')
-    ax1.set_ylabel('Fraction of Positives')
-    ax1.set_title('Calibration Plot')
-    ax1.legend()
+    plt.plot(prob_pred, prob_true, marker='o', linewidth=1, label='Model')
+    plt.plot([0, 1], [0, 1], linestyle='--', label='Perfectly calibrated', color='gray')
+    plt.xlabel('Mean Predicted Probability')
+    plt.ylabel('Fraction of Positives')
+    plt.title('Calibration Plot')
+    plt.legend()
     plt.show()
 
-
-
 if __name__ == "__main__":
-    # Configuration and data loading
+    # Configure logging
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+    # Load and preprocess the data
     config_path = '../config/config.json'
     df = load_feature_engineered_data(config_path)
+    columns_to_replace = ['Glucose', 'BloodPressure', 'SkinThickness', 'Insulin', 'BMI']
+    df[columns_to_replace] = df[columns_to_replace].replace(0, np.nan)
 
-    # Data Preparation
+    # Prepare the data
     X = df.drop('Outcome', axis=1)
     y = df['Outcome']
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    # Preprocessing Pipeline
+    # Define and apply the preprocessing pipeline
     preprocessing_pipeline = Pipeline([
         ('imputer', KNNImputer(n_neighbors=5)),
         ('scaler', StandardScaler()),
@@ -115,7 +119,7 @@ if __name__ == "__main__":
     X_train_preprocessed = preprocessing_pipeline.fit_transform(X_train)
     X_test_preprocessed = preprocessing_pipeline.transform(X_test)
 
-    # Model Definitions
+    # Define models
     models = {
         'RandomForest': RandomForestClassifier(random_state=42),
         'GradientBoosting': GradientBoostingClassifier(random_state=42),
@@ -123,16 +127,19 @@ if __name__ == "__main__":
         'SVC': SVC(probability=True, random_state=42),
         'MLP': MLPClassifier(random_state=42)
     }
-
-    # Model Training and Calibration with Isotonic Regression
+    # Train models without calibration and evaluate
     for model_name, model in models.items():
         logging.info(f"Training {model_name}")
         model.fit(X_train_preprocessed, y_train)
-        calibrated_model = CalibratedClassifierCV(model, method='isotonic', cv='prefit')
-        calibrated_model.fit(X_test_preprocessed, y_test)
-        evaluate_model_performance(calibrated_model, X_test_preprocessed, y_test, f"{model_name} (Calibrated)")
+        evaluate_model_performance(model, X_test_preprocessed, y_test, model_name)
+
+    # Evaluate model performance
+    evaluate_model_performance(model, X_test_preprocessed, y_test, model_name)
         
-    # Calibration Plot
-    model = list(models.values())[0] # Example using the first model
-    y_proba = model.predict_proba(X_test_preprocessed)[:, 1]
-    plot_calibration_curve(y_test, y_proba)
+    # Get predicted probabilities for the positive class
+    y_pred_proba = model.predict_proba(X_test_preprocessed)[:, 1]
+
+    # Plot the calibration curve
+    plot_calibration_curve(y_test, y_pred_proba)
+
+    logging.info("Evaluation completed for models without calibration.")

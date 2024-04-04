@@ -8,11 +8,8 @@ app = Flask(__name__)
 api = Api(app, version='1.0', title='Diabetes Prediction API',
           description='A simple API for predicting diabetes risk')
 
-# Load the trained model (ensure the path is correct)
 model_path = 'C:\\Users\\ali\\diabetes_risk_prediction\\notebooks\\best_model_xgboost.joblib'
 model = joblib.load(model_path)
-
-# Define the input and output data model for Swagger documentation
 input_model = api.model('InputModel', {
     'Pregnancies': fields.Integer(required=True, description='Number of pregnancies'),
     'Glucose': fields.Float(required=True, description='Plasma glucose concentration'),
@@ -43,20 +40,14 @@ class Predict(Resource):
     @api.expect(input_model, validate=True)
     @api.response(200, 'Success', output_model)
     def post(self):
-        # Extract features from the POST request's body
+    
         data = request.get_json()
-        processed_features = preprocess_input(data)
-        
-        # Make prediction
-        prediction = model.predict(processed_features)[0]
-        
-        # Respond with the predicted value
+        processed_features = preprocess_input(data)        
+        prediction = model.predict(processed_features)[0]                
         return {'prediction': int(prediction)}
 
 @app.route('/')
-def index():
-    # This route serves the HTML page
-    return render_template('/index.html')  # Ensure the HTML file exists in the templates folder
-
+def index():    
+    return render_template('/index.html')  
 if __name__ == '__main__':
     app.run(debug=True)
