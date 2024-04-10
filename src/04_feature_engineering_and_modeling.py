@@ -12,9 +12,9 @@ from sklearn.metrics import roc_curve, auc, precision_recall_curve, average_prec
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.calibration import CalibratedClassifierCV  # For calibration
 import sys 
+
 sys.path.append('../helpers')
 from data_helpers import load_config, load_data
-
 
 # Data loading and preprocessing
 def load_and_preprocess_data(config_path):
@@ -185,13 +185,22 @@ def plot_roc_curve(y_test, probabilities):
 
 if __name__ == "__main__":
     config_path = '../config/config.json'
+    processed_data_path = '../data/processed_data.csv'  # Specify the path for saving processed data
+    
     try: 
         df = load_and_preprocess_data(config_path)
         print(df.head()) 
+
+        # Save the processed data
+        save_processed_data(df, processed_data_path)
+        
         X, y = df.drop('Outcome', axis=1), df['Outcome']
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)    
-        class_weight_dict = {'balanced'}
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        
+        # Ensure class_weight is correctly set up; this should be a parameter, not a set
+        class_weight = 'balanced'  # If dynamic, consider calculating based on y_train
+        
         best_pipeline = hyperparameter_tuning(X_train, y_train)  
         evaluate_model_with_calibration(best_pipeline, X_train, y_train, X_test, y_test, method='sigmoid')
     except Exception as e:
-        print(f"An error occurred during data loading: {e}")
+        print(f"An error occurred: {e}")
